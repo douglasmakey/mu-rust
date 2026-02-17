@@ -1,0 +1,16 @@
+[package]
+name = "connect-server"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+tokio.workspace = true
+tokio-util.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+bytes.workspace = true
+# our packets
+mu-protocol = { path = "../crates/mu-protocol" }
