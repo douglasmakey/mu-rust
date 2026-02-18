@@ -102,3 +102,89 @@ pub fn handle_packet(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use mu_protocol::protocol_constants::C1;
+
+    use crate::config::ConfiguredGameServer;
+
+    use super::*;
+
+    fn peer() -> SocketAddr {
+        "127.0.0.1:12345".parse().expect("addr")
+    }
+
+    fn test_config() -> ConnectConfig {
+        ConnectConfig {
+            bind_addr: "120.0.0.1:3000".parse().expect("socket addr"),
+            servers: vec![ConfiguredGameServer {
+                id: 1,
+                load_percentage: 0,
+                ip_address: "127.0.0.1".parse().expect("addr"),
+                port: 55901,
+            }],
+        }
+    }
+
+    #[test]
+    fn unknown_packet_is_ignored() {
+        let packet = RawPacket::try_from_vec(vec![C1, 0x04, 0xAA, 0xBB]).expect("valid packet");
+        let action = handle_packet(&test_config(), &packet, peer());
+        assert!(matches!(action, PacketHandling::Ignore))
+    }
+
+    #[test]
+    fn malformed_connection_info_request_disconnects() {
+        let packet =
+            RawPacket::try_from_vec(vec![C1, 0x05, 0xF4, 0x03, 0x00]).expect("valid packet");
+        let action = handle_packet(&test_config(), &packet, peer());
+        assert!(matches!(action, PacketHandling::Disconnect))
+    }
+
+    #[test]
+    fn parse_connection_info_request_reads_server_id_as_little_endian() {
+        // server_id = 0x0305 stored as [0x05, 0x03] on the wire.
+        let packet = RawPacket::try_from_vec(vec![C1, 0x06, 0xF4, 0x03, 0x05, 0x03]).unwrap();
+        match ConnectServerPacket::parse(&packet).unwrap() {
+            ConnectServerPacket::ConnectionInfoRequest { server_id } => {
+                assert_eq!(server_id, 0x0305);
+            }
+            _ => panic!("expected ConnectionInfoRequest"),
+        }
+    }
+
+    #[test]
+    fn server_list_request_replies_with_correct_payload() {
+        let packet = RawPacket::try_from_vec(vec![C1, 0x04, 0xF4, 0x06]).unwrap();
+        if let PacketHandling::Reply(reply) = handle_packet(&test_config(), &packet, peer()) {
+            // 1 configured server → 7-byte header + 4-byte entry = 11 bytes.
+            assert_eq!(reply.len(), 11);
+        } else {
+            panic!("expected Reply");
+        }
+    }
+
+    #[test]
+    fn connection_info_request_replies_with_server_address() {
+        // server_id = 1, LE: [0x01, 0x00].
+        let packet = RawPacket::try_from_vec(vec![C1, 0x06, 0xF4, 0x03, 0x01, 0x00]).unwrap();
+        if let PacketHandling::Reply(reply) = handle_packet(&test_config(), &packet, peer()) {
+            let data = reply.as_slice();
+            assert_eq!(&data[4..13], b"127.0.0.1");
+            assert_eq!(u16::from_le_bytes([data[20], data[21]]), 55901);
+        } else {
+            panic!("expected Reply");
+        }
+    }
+
+    #[test]
+    fn connection_info_request_unknown_server_ignores() {
+        // server_id 99 is not in the config.
+        let packet = RawPacket::try_from_vec(vec![C1, 0x06, 0xF4, 0x03, 0x63, 0x00]).unwrap();
+        assert!(matches!(
+            handle_packet(&test_config(), &packet, peer()),
+            PacketHandling::Ignore
+        ));
+    }
+}

@@ -81,3 +81,70 @@ pub fn build_server_list_response(servers: &[ConfiguredGameServer]) -> anyhow::R
 
     RawPacket::try_new(buf.freeze()).context("invalid list response packet")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_connection_info_packets() {
+        let port = 55901;
+        let packet =
+            build_connection_info("127.0.0.1".parse().expect("addr"), port).expect("paccket");
+        let packet_slice = packet.as_slice();
+        assert_eq!(packet_slice[0], C1);
+        assert_eq!(packet_slice[1], 22);
+        assert_eq!(packet_slice[2], 0xF4);
+        assert_eq!(packet_slice[3], 0x03);
+        assert_eq!(&packet_slice[4..13], b"127.0.0.1");
+        assert_eq!(&packet_slice[13..20], &[0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(&packet_slice[20..], port.to_le_bytes());
+    }
+
+    #[test]
+    fn build_connection_info_max_length_ip_fits_in_16_byte_field() {
+        // "255.255.255.255" is 15 chars — the tightest fit; one null padding byte remains.
+        let packet = build_connection_info("255.255.255.255".parse().unwrap(), 55901).unwrap();
+        let data = packet.as_slice();
+        assert_eq!(&data[4..19], b"255.255.255.255");
+        assert_eq!(data[19], 0x00);
+    }
+
+    // --- build_server_list_response ---
+
+    #[test]
+    fn build_server_list_response_wire_layout() {
+        let servers = vec![
+            ConfiguredGameServer {
+                id: 1,
+                load_percentage: 50,
+                ip_address: "127.0.0.1".parse().unwrap(),
+                port: 55901,
+            },
+            ConfiguredGameServer {
+                id: 2,
+                load_percentage: 75,
+                ip_address: "127.0.0.2".parse().unwrap(),
+                port: 55902,
+            },
+        ];
+        let packet = build_server_list_response(&servers).unwrap();
+        let data = packet.as_slice();
+
+        assert_eq!(data.len(), HEADER_SIZE + 2 * ENTRY_SIZE);
+
+        // C2 big-endian length must match actual buffer size.
+        assert_eq!(u16::from_be_bytes([data[1], data[2]]) as usize, data.len());
+
+        let server_count = u16::from_be_bytes([data[5], data[6]]);
+        assert_eq!(server_count, 2);
+
+        // First entry at offset 7 — server_id is little-endian.
+        assert_eq!(u16::from_le_bytes([data[7], data[8]]), 1);
+        assert_eq!(data[9], 50);
+
+        // Second entry at offset 11.
+        assert_eq!(u16::from_le_bytes([data[11], data[12]]), 2);
+        assert_eq!(data[13], 75);
+    }
+}

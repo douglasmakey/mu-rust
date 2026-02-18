@@ -159,3 +159,87 @@ pub fn declared_length_from_prefix(bytes: &[u8]) -> Result<Option<usize>, Protoc
 
     Ok(Some(declared_len))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_header_length() {
+        assert_eq!(RawPacketType::C1.header_length(), 2);
+        assert_eq!(RawPacketType::C2.header_length(), 3);
+        assert_eq!(RawPacketType::C3.header_length(), 2);
+        assert_eq!(RawPacketType::C4.header_length(), 3);
+    }
+
+    #[test]
+    fn test_is_encrypted() {
+        assert!(!RawPacketType::C1.is_encrypted());
+        assert!(!RawPacketType::C2.is_encrypted());
+        assert!(RawPacketType::C3.is_encrypted());
+        assert!(RawPacketType::C4.is_encrypted());
+    }
+
+    #[test]
+    fn declared_length_from_c1_prefix() {
+        let declared = declared_length_from_prefix(&[0xC1, 0x04, 0x00, 0x01]).unwrap();
+        assert_eq!(declared, Some(4));
+    }
+
+    #[test]
+    fn try_new_rejects_length_mismatch() {
+        let packet = RawPacket::try_new(Bytes::from_static(&[0xC1, 0x05, 0x00, 0x01]));
+        assert!(matches!(
+            packet,
+            Err(ProtocolError::LengthMismatch {
+                declared: 5,
+                actual: 4
+            })
+        ));
+    }
+
+    // --- declared_length_from_prefix ---
+
+    #[test]
+    fn declared_length_c2_big_endian_two_byte_length() {
+        // C2 length field spans bytes 1–2 in big-endian; verify the shift is correct.
+        let declared =
+            declared_length_from_prefix(&[C2, 0x00, 0x07, 0xAA, 0xBB, 0xCC, 0xDD]).unwrap();
+        assert_eq!(declared, Some(7));
+    }
+
+    #[test]
+    fn declared_length_incomplete_returns_none() {
+        assert_eq!(declared_length_from_prefix(&[]).unwrap(), None);
+        // C2 needs two length bytes; only one provided.
+        assert_eq!(declared_length_from_prefix(&[C2, 0x00]).unwrap(), None);
+    }
+
+    #[test]
+    fn declared_length_too_small_returns_error() {
+        // Declared length smaller than its own header is structurally impossible.
+        assert!(matches!(
+            declared_length_from_prefix(&[C1, 0x01]),
+            Err(ProtocolError::InvalidLength { declared: 1, minimum: 2 })
+        ));
+    }
+
+    // --- RawPacket construction ---
+
+    #[test]
+    fn try_new_empty_buffer_returns_incomplete() {
+        assert!(matches!(
+            RawPacket::try_new(Bytes::new()),
+            Err(ProtocolError::Incomplete)
+        ));
+    }
+
+    // --- RawPacket::header_codes ---
+
+    #[test]
+    fn header_codes_c2_offset_is_three() {
+        // C2 header is 3 bytes so code/sub_code sit at indices 3 and 4, not 2 and 3.
+        let packet = RawPacket::try_from_vec(vec![C2, 0x00, 0x05, 0xF4, 0x06]).unwrap();
+        assert_eq!(packet.header_codes(), (Some(0xF4), Some(0x06)));
+    }
+}
