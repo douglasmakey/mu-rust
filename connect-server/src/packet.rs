@@ -1,4 +1,4 @@
-use crate::config::ConfiguredGameServer;
+use crate::context::ConfiguredGameServer;
 use anyhow::{Context, Result};
 use bytes::{BufMut, BytesMut};
 use mu_protocol::{
@@ -13,7 +13,7 @@ use tracing::debug;
 const HEADER_SIZE: usize = 3 + 1 + 1 + 2; // C2 framing(3) + code(1) + sub_code(1) + server_count(2)
 const ENTRY_SIZE: usize = 4; // server_id(2) + load_percentage(1) + padding(1)
 
-/// Builds a C1-F4-03 ConnectionInfo response packet.
+/// Builds a C1-F4-03 `ConnectionInfo` response packet.
 /// See: docs/OpenMU/Packets/C1-F4-03-ConnectionInfo_by-server.md
 ///
 /// Wire layout (22 bytes total):
@@ -44,7 +44,7 @@ pub fn build_connection_info(ip: Ipv4Addr, port: u16) -> Result<RawPacket> {
     RawPacket::try_new(buf.freeze()).context("invalid connection info packet")
 }
 
-/// Builds a C2-F4-06 ServerListResponse packet.
+/// Builds a C2-F4-06 `ServerListResponse` packet.
 /// See: docs/OpenMU/Packets/C2-F4-06-ServerListResponse_by-server.md
 ///
 /// Wire layout:
@@ -53,7 +53,7 @@ pub fn build_connection_info(ip: Ipv4Addr, port: u16) -> Result<RawPacket> {
 ///   [3]      code   (0xF4)
 ///   [4]      sub    (0x06)
 ///   [5..7]   server count (big-endian u16)
-///   [7..]    N × 4-byte ServerLoadInfo entries
+///   [7..]    N × 4-byte `ServerLoadInfo` entries
 pub fn build_server_list_response(servers: &[ConfiguredGameServer]) -> anyhow::Result<RawPacket> {
     let payload_len = HEADER_SIZE + servers.len() * ENTRY_SIZE;
     let packet_len: u16 = payload_len
@@ -90,7 +90,7 @@ mod tests {
     fn build_connection_info_packets() {
         let port = 55901;
         let packet =
-            build_connection_info("127.0.0.1".parse().expect("addr"), port).expect("paccket");
+            build_connection_info("127.0.0.1".parse().expect("addr"), port).expect("packet");
         let packet_slice = packet.as_slice();
         assert_eq!(packet_slice[0], C1);
         assert_eq!(packet_slice[1], 22);

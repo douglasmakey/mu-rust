@@ -43,6 +43,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "mu-protocol",
+ "mu-runtime",
  "tokio",
  "tokio-util",
  "tracing",
@@ -109,6 +110,7 @@ dependencies = [
  "anyhow",
  "futures-util",
  "mu-protocol",
+ "mu-runtime",
  "tokio",
  "tokio-util",
  "tracing",
@@ -176,6 +178,19 @@ dependencies = [
  "bytes",
  "thiserror",
  "tokio-util",
+]
+
+[[package]]
+name = "mu-runtime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "mu-protocol",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]

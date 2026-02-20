@@ -19,9 +19,13 @@ pub enum ProtocolError {
     InvalidLength { declared: usize, minimum: usize },
 
     /// The packet is shorter than the minimum required by its specific message type.
-    /// (e.g., a ConnectionInfoRequest that lacks the server_id bytes).
+    /// (e.g., a `ConnectionInfoRequest` that lacks the `server_id` bytes).
     #[error("packet too short: need {expected} bytes, got {actual}")]
     PacketTooShort { expected: usize, actual: usize },
+
+    /// The declared length exceeds the configured per-connection maximum.
+    #[error("packet too large: max {max} bytes, got {actual}")]
+    PacketTooLarge { max: usize, actual: usize },
 
     /// The declared length field doesn't match the actual buffer size.
     #[error("packet length does not match declared length: declared={declared}, actual={actual}")]

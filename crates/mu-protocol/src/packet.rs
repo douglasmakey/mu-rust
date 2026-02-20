@@ -220,7 +220,10 @@ mod tests {
         // Declared length smaller than its own header is structurally impossible.
         assert!(matches!(
             declared_length_from_prefix(&[C1, 0x01]),
-            Err(ProtocolError::InvalidLength { declared: 1, minimum: 2 })
+            Err(ProtocolError::InvalidLength {
+                declared: 1,
+                minimum: 2
+            })
         ));
     }
 

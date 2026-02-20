@@ -1,74 +1,46 @@
 use anyhow::{Context, Result};
-use futures_util::{SinkExt, StreamExt};
-use mu_protocol::{codecs::PacketCodec, packet::RawPacket, protocol_constants::C1};
-use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream};
-use tokio_util::{
-    bytes::{BufMut, BytesMut},
-    codec::Framed,
+use mu_protocol::{
+    packet::RawPacket,
+    protocol_constants::{BIG_PACKET_MAX_SIZE, C1},
 };
+use mu_runtime::{PacketStream, Server, ServerConfig};
+use std::{net::SocketAddr, time::Duration};
+use tokio_util::bytes::{BufMut, BytesMut};
 use tracing::{debug, info, warn};
-
-#[derive(Debug, Clone)]
-struct GameConfig {
-    bind_addr: SocketAddr,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    let config = GameConfig {
+    let default_timeout = Duration::from_secs(120);
+    let server = Server::new(ServerConfig {
+        name: "GameServer".to_string(),
         bind_addr: "0.0.0.0:55901".parse().unwrap(),
-    };
+        read_timeout: default_timeout,
+        write_timeout: default_timeout,
+        max_packet_size: BIG_PACKET_MAX_SIZE,
+    });
 
-    info!(bind_addr = %config.bind_addr, "starting game server");
-    run_server(config).await
-}
-
-async fn run_server(config: GameConfig) -> Result<()> {
-    let listener = TcpListener::bind(&config.bind_addr)
+    server
+        .run_tcp_listener(
+            move |stream, peer_addr| async move { handle_client(stream, peer_addr).await },
+        )
         .await
-        .with_context(|| format!("failed to bind to {}", &config.bind_addr))?;
-
-    info!("Game Server is listening");
-    let mut shutdown = Box::pin(tokio::signal::ctrl_c());
-    loop {
-        tokio::select! {
-            _ = &mut shutdown => {
-                info!("shutting down server");
-                break;
-            }
-            accepted = listener.accept() => {
-                let (socket, peer_addr) = accepted.context("failed to accept client connection")?;
-                info!(peer = %peer_addr, "client connected");
-                tokio::spawn(async move {
-                    if let Err(e) = handle_client(socket, peer_addr).await {
-                        warn!(peer = %peer_addr, error = %e, "client handling failed");
-                    }
-                });
-
-            }
-        }
-    }
-
-    Ok(())
 }
 
-async fn handle_client(stream: TcpStream, peer_addr: SocketAddr) -> Result<()> {
+async fn handle_client(mut stream: PacketStream, peer_addr: SocketAddr) -> Result<()> {
     debug!(peer = %peer_addr, "client handler has started.");
-    let mut framed = Framed::new(stream, PacketCodec);
 
     // MU protocol: server must send GameServerEntered immediately on connect.
     // expect is acceptable — build_hello_packet uses hardcoded bytes that are
     // validated at construction. A failure here is a programming error.
     let hello_packet = build_hello_packet().expect("invalid hello packet");
-    framed
+    stream
         .send(hello_packet)
         .await
         .context("failed to send hello packet")?;
 
     debug!(%peer_addr, "sent hello packet");
-    while let Some(next_packet) = framed.next().await {
+    while let Some(next_packet) = stream.recv().await {
         let packet = match next_packet {
             Ok(packet) => packet,
             Err(e) => {
@@ -77,13 +49,13 @@ async fn handle_client(stream: TcpStream, peer_addr: SocketAddr) -> Result<()> {
             }
         };
 
-        info!(packet = ?packet, "received packet");
+        debug!(packet = ?packet, "received packet");
     }
     info!(peer = %peer_addr, "game-server client disconnected");
     Ok(())
 }
 
-/// Builds the C1-F1-00 GameServerEntered hello packet.
+/// Builds the C1-F1-00 `GameServerEntered` hello packet.
 ///
 /// Wire layout (12 bytes):
 ///   [0]     C1 header

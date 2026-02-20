@@ -1,4 +1,4 @@
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::Ipv4Addr;
 
 #[derive(Debug, Clone)]
 pub struct ConfiguredGameServer {
@@ -9,7 +9,6 @@ pub struct ConfiguredGameServer {
 }
 
 #[derive(Debug, Clone)]
-pub struct ConnectConfig {
-    pub bind_addr: SocketAddr,
+pub struct ConnectCtx {
     pub servers: Vec<ConfiguredGameServer>,
 }

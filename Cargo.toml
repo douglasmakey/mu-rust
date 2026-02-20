@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["connect-server", "crates/mu-protocol", "game-server"]
+members = ["connect-server", "crates/mu-protocol", "crates/mu-runtime", "game-server"]
 
 
 [workspace.dependencies]

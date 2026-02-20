@@ -1,5 +1,5 @@
 use crate::{
-    config::ConnectConfig,
+    context::ConnectCtx,
     packet::{build_connection_info, build_server_list_response},
 };
 use anyhow::Result;
@@ -51,11 +51,7 @@ pub enum PacketHandling {
     Disconnect,
 }
 
-pub fn handle_packet(
-    config: &ConnectConfig,
-    packet: &RawPacket,
-    peer: SocketAddr,
-) -> PacketHandling {
+pub fn handle_packet(ctx: &ConnectCtx, packet: &RawPacket, peer: SocketAddr) -> PacketHandling {
     let parsed = match ConnectServerPacket::parse(packet) {
         Ok(p) => p,
         Err(e) => {
@@ -66,8 +62,8 @@ pub fn handle_packet(
 
     match parsed {
         ConnectServerPacket::ServerListRequest => {
-            info!(peer = %peer, server_count = config.servers.len(), "Server list requested");
-            let response = build_server_list_response(&config.servers);
+            info!(peer = %peer, server_count = ctx.servers.len(), "Server list requested");
+            let response = build_server_list_response(&ctx.servers);
             match response {
                 Ok(packet) => PacketHandling::Reply(packet),
                 Err(e) => {
@@ -77,23 +73,20 @@ pub fn handle_packet(
             }
         }
         ConnectServerPacket::ConnectionInfoRequest { server_id } => {
-            let server = config.servers.iter().find(|s| s.id == server_id);
-            match server {
-                Some(server) => {
-                    info!(peer = %peer, server_id = server.id, "Connection info requested");
-                    let response = build_connection_info(server.ip_address, server.port);
-                    match response {
-                        Ok(packet) => PacketHandling::Reply(packet),
-                        Err(e) => {
-                            warn!(error = %e, "Failed to build connection info response");
-                            PacketHandling::Disconnect
-                        }
+            let server = ctx.servers.iter().find(|s| s.id == server_id);
+            if let Some(server) = server {
+                info!(peer = %peer, server_id = server.id, "Connection info requested");
+                let response = build_connection_info(server.ip_address, server.port);
+                match response {
+                    Ok(packet) => PacketHandling::Reply(packet),
+                    Err(e) => {
+                        warn!(error = %e, "Failed to build connection info response");
+                        PacketHandling::Disconnect
                     }
                 }
-                None => {
-                    warn!(peer = %peer, server_id = server_id, "Server not found");
-                    PacketHandling::Ignore
-                }
+            } else {
+                warn!(peer = %peer, server_id = server_id, "Server not found");
+                PacketHandling::Ignore
             }
         }
         ConnectServerPacket::Unknown { code, sub_code } => {
@@ -107,7 +100,7 @@ pub fn handle_packet(
 mod tests {
     use mu_protocol::protocol_constants::C1;
 
-    use crate::config::ConfiguredGameServer;
+    use crate::context::ConfiguredGameServer;
 
     use super::*;
 
@@ -115,9 +108,8 @@ mod tests {
         "127.0.0.1:12345".parse().expect("addr")
     }
 
-    fn test_config() -> ConnectConfig {
-        ConnectConfig {
-            bind_addr: "120.0.0.1:3000".parse().expect("socket addr"),
+    fn test_config() -> ConnectCtx {
+        ConnectCtx {
             servers: vec![ConfiguredGameServer {
                 id: 1,
                 load_percentage: 0,

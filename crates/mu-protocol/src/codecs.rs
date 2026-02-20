@@ -11,7 +11,15 @@ use crate::{
 /// Responsibilities are split:
 /// - **This codec**: stream framing — wait until enough bytes are buffered for a complete frame.
 /// - **`RawPacket::try_new`**: structural validation — header type, declared vs actual length.
-pub struct PacketCodec;
+pub struct PacketCodec {
+    max_packet_size: usize,
+}
+
+impl PacketCodec {
+    pub fn new(max_packet_size: usize) -> Self {
+        Self { max_packet_size }
+    }
+}
 
 impl Decoder for PacketCodec {
     type Item = RawPacket;
@@ -21,6 +29,13 @@ impl Decoder for PacketCodec {
         let Some(declared_len) = declared_length_from_prefix(src.as_ref())? else {
             return Ok(None);
         };
+
+        if declared_len > self.max_packet_size {
+            return Err(ProtocolError::PacketTooLarge {
+                max: self.max_packet_size,
+                actual: declared_len,
+            });
+        }
 
         if src.len() < declared_len {
             // Tell tokio-util how many bytes we still need so it can size
@@ -53,7 +68,7 @@ mod tests {
 
     #[test]
     fn decode_c1_packet() {
-        let mut codec = PacketCodec;
+        let mut codec = PacketCodec::new(255);
         let mut buf = BytesMut::from(&[C1, 0x04, 0x00, 0x01][..]);
         let packet = codec.decode(&mut buf).unwrap().unwrap();
 
@@ -63,7 +78,7 @@ mod tests {
 
     #[test]
     fn decode_c2_packet() {
-        let mut codec = PacketCodec;
+        let mut codec = PacketCodec::new(255);
         let mut buf = BytesMut::from(&[C2, 0x00, 0x07, 0xF4, 0x06, 0x00, 0x00][..]);
         let packet = codec.decode(&mut buf).unwrap().unwrap();
 
@@ -75,7 +90,7 @@ mod tests {
 
     #[test]
     fn incomplete_packet_returns_none() {
-        let mut codec = PacketCodec;
+        let mut codec = PacketCodec::new(255);
         let mut buf = BytesMut::from(&[0xC1, 0x05, 0x00][..]);
         assert!(codec.decode(&mut buf).unwrap().is_none());
     }
@@ -84,7 +99,7 @@ mod tests {
     fn decode_two_consecutive_packets_from_same_buffer() {
         // The codec must advance the buffer cursor correctly so the second
         // call yields the next frame, not a re-read of the first.
-        let mut codec = PacketCodec;
+        let mut codec = PacketCodec::new(255);
         let mut buf = BytesMut::new();
         buf.extend_from_slice(&[C1, 0x04, 0xF4, 0x06]);
         buf.extend_from_slice(&[C1, 0x04, 0xAA, 0xBB]);
@@ -99,7 +114,7 @@ mod tests {
     #[test]
     fn decode_invalid_header_returns_error() {
         use crate::error::ProtocolError;
-        let mut codec = PacketCodec;
+        let mut codec = PacketCodec::new(255);
         let mut buf = BytesMut::from(&[0x00, 0x04, 0x00, 0x01][..]);
         assert!(matches!(
             codec.decode(&mut buf),
@@ -109,7 +124,7 @@ mod tests {
 
     #[test]
     fn encode_round_trips_packet_bytes() {
-        let mut codec = PacketCodec;
+        let mut codec = PacketCodec::new(255);
         let packet = RawPacket::try_from_vec(vec![C1, 0x04, 0xF4, 0x06]).unwrap();
         let mut dst = BytesMut::new();
         codec.encode(packet, &mut dst).unwrap();

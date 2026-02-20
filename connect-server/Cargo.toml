@@ -14,3 +14,4 @@ tracing-subscriber.workspace = true
 bytes.workspace = true
 # our packets
 mu-protocol = { path = "../crates/mu-protocol" }
+mu-runtime = { path = "../crates/mu-runtime" }
