@@ -4,7 +4,10 @@ use mu_game::{
     character::{Character, CharacterName, HeroState},
     iam::AccountId,
 };
-use mu_protocol::{packet::RawPacket, protocol_constants::{C1, C3}};
+use mu_protocol::{
+    packet::RawPacket,
+    protocol_constants::{C1, C3},
+};
 use mu_runtime::PacketStream;
 use std::sync::Arc;
 use tokio_util::bytes::{BufMut, BytesMut};
@@ -214,7 +217,10 @@ fn build_map_changed(character: &Character) -> RawPacket {
     buf.put_u8(0x01); // IsMapChange = true
     // MapNumber: Season 6 MapChanged075 uses u8. Warn and clamp if somehow > 255.
     let map_num = u8::try_from(character.spawn.map_id.0).unwrap_or_else(|_| {
-        warn!(map_id = character.spawn.map_id.0, "map_id exceeds u8 range; clamping to 255");
+        warn!(
+            map_id = character.spawn.map_id.0,
+            "map_id exceeds u8 range; clamping to 255"
+        );
         255
     });
     buf.put_u8(map_num); // MapNumber (u8 for 075 format)
