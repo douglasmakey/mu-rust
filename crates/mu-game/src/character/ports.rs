@@ -1,5 +1,5 @@
 use crate::{
-    character::{character::Character, value_objects::CharacterName},
+    character::{Character, value_objects::CharacterName},
     errors::InfrastructureError,
     iam::value_objects::AccountId,
 };

@@ -1,8 +1,6 @@
 use crate::{
     character::{
-        character::{Character, CharacterError},
-        ports::CharacterRepository,
-        value_objects::CharacterName,
+        Character, CharacterError, ports::CharacterRepository, value_objects::CharacterName,
     },
     errors::InfrastructureError,
     iam::AccountId,

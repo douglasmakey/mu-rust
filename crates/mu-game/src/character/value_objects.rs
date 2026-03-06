@@ -86,7 +86,7 @@ impl CharacterLevel {
     pub const MAX: u16 = 400;
 
     pub fn new(level: u16) -> Result<Self, CharacterError> {
-        if level < Self::MIN || level > Self::MAX {
+        if !(Self::MIN..=Self::MAX).contains(&level) {
             return Err(CharacterError::LevelOutOfRange {
                 min: Self::MIN as i64,
                 max: Self::MAX as i64,

@@ -147,8 +147,8 @@ fn encrypt_block(
     }
 
     // Pack into the first 9 bytes of the output.
-    for i in 0..4 {
-        write_value(output, i, r[i]);
+    for (i, &val) in r.iter().enumerate() {
+        write_value(output, i, val);
     }
 
     // Trailer: encrypted block size (byte 9) and checksum (byte 10).
@@ -300,7 +300,7 @@ pub fn decrypt(
     let hdr = header_size(packet[0]);
     let content = &packet[hdr..];
 
-    if content.len() % ENCRYPTED_BLOCK_SIZE != 0 {
+    if !content.len().is_multiple_of(ENCRYPTED_BLOCK_SIZE) {
         return Err(SimpleModulusError::InvalidContentSize);
     }
 

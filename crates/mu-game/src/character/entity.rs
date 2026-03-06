@@ -14,7 +14,7 @@ pub struct Character {
     pub name: CharacterName,
     pub class: CharacterClass,
     pub level: CharacterLevel,
-    experience: u64,
+    pub experience: u64,
     pub spawn: SpawnPoint,
     pub hero_state: HeroState,
 }
