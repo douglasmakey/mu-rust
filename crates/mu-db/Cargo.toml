@@ -1,0 +1,15 @@
+[package]
+name = "mu-db"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sqlx      = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "chrono"] }
+# workspace
+chrono.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+
+# our
+mu-game = { path = "../mu-game" }

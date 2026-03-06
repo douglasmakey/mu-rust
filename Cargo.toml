@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["connect-server", "crates/mu-protocol", "crates/mu-runtime", "game-server"]
+members = ["connect-server", "crates/mu-db", "crates/mu-game", "crates/mu-protocol", "crates/mu-runtime", "game-server"]
 
 
 [workspace.dependencies]
@@ -16,3 +16,6 @@ tracing-subscriber = { version = "0.3.22", features = [
     "fmt",
     "std",
 ] }
+dotenvy = "0.15"
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"

@@ -10,6 +10,11 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tokio-util.workspace = true
 futures-util.workspace = true
+dotenvy.workspace = true
+async-trait.workspace = true
+
 # our
 mu-protocol = { path = "../crates/mu-protocol" }
 mu-runtime = { path = "../crates/mu-runtime" }
+mu-db = { path = "../crates/mu-db" }
+mu-game = { path = "../crates/mu-game" }

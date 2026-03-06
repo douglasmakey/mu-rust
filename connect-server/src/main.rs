@@ -5,6 +5,7 @@ mod packet;
 use crate::context::{ConfiguredGameServer, ConnectCtx};
 use anyhow::{Context, Result};
 use mu_protocol::{
+    codecs::EncryptionMode,
     packet::RawPacket,
     protocol_constants::{C1, SMALL_PACKET_MAX_SIZE},
 };
@@ -39,6 +40,7 @@ async fn main() -> Result<()> {
         read_timeout: Duration::from_secs(120),
         write_timeout: Duration::from_secs(120),
         max_packet_size: SMALL_PACKET_MAX_SIZE, // C1 only — no need for larger packets
+        encryption: EncryptionMode::None,       // connect-server does not encrypt
     });
     let ctx = Arc::new(ctx);
     server

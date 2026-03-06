@@ -10,6 +10,10 @@ pub enum ProtocolError {
     #[error("packet is incomplete")]
     Incomplete,
 
+    /// The packet is malformed — e.g., invalid UTF-8 in a string field.
+    #[error("packet is malformed")]
+    Malformed,
+
     /// The first byte is not a recognized packet type (C1/C2/C3/C4).
     #[error("invalid packet header byte: 0x{0:02X}")]
     InvalidHeader(u8),
@@ -30,6 +34,10 @@ pub enum ProtocolError {
     /// The declared length field doesn't match the actual buffer size.
     #[error("packet length does not match declared length: declared={declared}, actual={actual}")]
     LengthMismatch { declared: usize, actual: usize },
+
+    /// A SimpleModulus block failed to decrypt (bad checksum, counter, or block size).
+    #[error("decryption failed: {0}")]
+    Decryption(String),
 
     #[error("i/o error: {0}")]
     Io(#[from] std::io::Error),

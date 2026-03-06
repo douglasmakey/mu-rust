@@ -1,16 +1,49 @@
+mod session;
+mod state;
+
+use crate::state::{GameState, InMemorySessionRegistry};
 use anyhow::{Context, Result};
+use mu_db::Postgres;
 use mu_protocol::{
+    codecs::EncryptionMode,
     packet::RawPacket,
     protocol_constants::{BIG_PACKET_MAX_SIZE, C1},
 };
 use mu_runtime::{PacketStream, Server, ServerConfig};
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio_util::bytes::{BufMut, BytesMut};
-use tracing::{debug, info, warn};
+use tracing::{Level, debug, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    dotenvy::dotenv().ok();
+    tracing_subscriber::fmt::fmt()
+        .with_file(true)
+        .with_line_number(true)
+        .with_max_level(Level::DEBUG)
+        .init();
+
+    // Init DB
+    let db_url =
+        std::env::var("DATABASE_URL").context("DATABASE_URL environment variable not set")?;
+
+    let db = Postgres::new(&db_url)
+        .await
+        .context("failed to connect to database")?;
+
+    db.run_migrations()
+        .await
+        .context("failed to run migrations")?;
+
+    info!("database connected and migrations applied");
+
+    let sessions = InMemorySessionRegistry::new();
+    let game_state = Arc::new(GameState::new(
+        db.account_repo(),
+        sessions,
+        db.character_repo(),
+    ));
+
     let default_timeout = Duration::from_secs(120);
     let server = Server::new(ServerConfig {
         name: "GameServer".to_string(),
@@ -18,16 +51,22 @@ async fn main() -> Result<()> {
         read_timeout: default_timeout,
         write_timeout: default_timeout,
         max_packet_size: BIG_PACKET_MAX_SIZE,
+        encryption: EncryptionMode::SimpleModulusPlusXOR32,
     });
 
     server
-        .run_tcp_listener(
-            move |stream, peer_addr| async move { handle_client(stream, peer_addr).await },
-        )
+        .run_tcp_listener(move |stream, peer_addr| {
+            let state = Arc::clone(&game_state);
+            async move { handle_client(stream, peer_addr, state).await }
+        })
         .await
 }
 
-async fn handle_client(mut stream: PacketStream, peer_addr: SocketAddr) -> Result<()> {
+async fn handle_client(
+    mut stream: PacketStream,
+    peer_addr: SocketAddr,
+    state: Arc<GameState>,
+) -> Result<()> {
     debug!(peer = %peer_addr, "client handler has started.");
 
     // MU protocol: server must send GameServerEntered immediately on connect.
@@ -40,17 +79,8 @@ async fn handle_client(mut stream: PacketStream, peer_addr: SocketAddr) -> Resul
         .context("failed to send hello packet")?;
 
     debug!(%peer_addr, "sent hello packet");
-    while let Some(next_packet) = stream.recv().await {
-        let packet = match next_packet {
-            Ok(packet) => packet,
-            Err(e) => {
-                warn!(error = %e, "Packet read error");
-                break;
-            }
-        };
+    session::run(stream, peer_addr, state).await?;
 
-        debug!(packet = ?packet, "received packet");
-    }
     info!(peer = %peer_addr, "game-server client disconnected");
     Ok(())
 }

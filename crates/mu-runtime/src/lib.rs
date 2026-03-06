@@ -1,6 +1,10 @@
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
-use mu_protocol::{codecs::PacketCodec, error::ProtocolError, packet::RawPacket};
+use mu_protocol::{
+    codecs::{EncryptionMode, PacketCodec},
+    error::ProtocolError,
+    packet::RawPacket,
+};
 use std::{net::SocketAddr, time::Duration};
 use thiserror::Error;
 use tokio::net::{TcpListener, TcpStream};
@@ -34,11 +38,12 @@ impl PacketStream {
     pub(crate) fn new(
         socket: TcpStream,
         max_packet_size: usize,
+        mode: EncryptionMode,
         read_timeout: Duration,
         write_timeout: Duration,
     ) -> Self {
         Self {
-            inner: Framed::new(socket, PacketCodec::new(max_packet_size)),
+            inner: Framed::new(socket, PacketCodec::new(max_packet_size, mode)),
             read_timeout,
             write_timeout,
         }
@@ -66,6 +71,7 @@ pub struct ServerConfig {
     pub read_timeout: Duration,
     pub write_timeout: Duration,
     pub max_packet_size: usize,
+    pub encryption: EncryptionMode,
 }
 
 pub struct Server {
@@ -108,6 +114,7 @@ impl Server {
                     let stream = PacketStream::new(
                         socket,
                         self.config.max_packet_size,
+                        self.config.encryption.clone(),
                         self.config.read_timeout,
                         self.config.write_timeout,
                     );

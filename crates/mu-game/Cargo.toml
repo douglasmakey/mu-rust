@@ -1,11 +1,12 @@
 [package]
-name = "mu-protocol"
+name = "mu-game"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bytes.workspace = true
+bcrypt = "0.15"
+# workspace
+chrono.workspace = true
+async-trait.workspace = true
 thiserror.workspace = true
-tokio-util.workspace = true
-anyhow.workspace = true
 tracing.workspace = true
